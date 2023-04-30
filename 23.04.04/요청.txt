@@ -1,0 +1,6 @@
+1. 코드 : 1000개 CSV 파일 -> VG Class 변환 h5py 저장
+2. 코드 : 변환한 것 예측
+3. 코드 : 박영재가 준 CSV 파일처럼 save
+
+코드 별로
+Input_dir / Outputdir

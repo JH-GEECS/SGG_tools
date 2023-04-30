@@ -46,7 +46,6 @@ def image_to_json(image_dir, file_path, file_path_2):
             json.dump(image_name_to_idx, f2)
         json.dump(visual_genome_list, f1)
 
-
 def image_to_json_for_rel(image_dir, file_path, file_path_2, rel_dir):
     # pandas 기준으로 해야할 것으로 생각된다.
     with open(file_path, 'w') as f1:
@@ -88,14 +87,11 @@ def image_to_json_for_rel(image_dir, file_path, file_path_2, rel_dir):
 
 
 if __name__ == "__main__":
-    image_dir = r'Z:\assistant\assistant_deploy\image_processed'
-    root_dir = r'Z:\assistant\assistant_deploy'
-    rel_dir = r'Z:\assistant\assistant_deploy\rel_pred_anot_spc\results'
+    image_dir = r'Z:\bak_sgb\datasets\vg\debug_20230425\Image'
+    root_dir = r'Z:\bak_sgb\datasets\vg\debug_20230425'
+    rel_dir = r'Z:\bak_sgb\datasets\vg\debug_20230425\CSV_test'
     file_name_1 = 'image_data_rel.json'
     file_name_2 = 'image_name_to_idx_rel.json'
 
     # image_to_json(image_dir, os.path.join(root_dir, file_name_1), os.path.join(root_dir, file_name_2))
     image_to_json_for_rel(image_dir, os.path.join(root_dir, file_name_1), os.path.join(root_dir, file_name_2), rel_dir)
-    with open(os.path.join(root_dir, file_name_1), 'r') as f:
-        test = json.load(f)
-        a = 1

@@ -4,6 +4,8 @@ import pandas as pd
 import time
 import spellchecker
 import numpy as np
+from tqdm import tqdm
+
 
 def glove_example_code():
     import gensim.downloader
@@ -153,6 +155,57 @@ def nip_refine_vg_map(orgin, map_file, result):
 
     df_origin.to_csv(result)
     test = 1
+def word_extender(new_raw_list, prev_list, dir):
+    import inflect
+    from nltk.corpus import wordnet
+    p = inflect.engine()
+    label_to_idx = {"kite": 69, "pant": 87, "bowl": 18, "laptop": 72, "paper": 88, "motorcycle": 80, "railing": 103, "chair": 28, "windshield": 146, "tire": 130, "cup": 34, "bench": 10, "tail": 127, "bike": 11, "board": 13, "orange": 86, "hat": 60, "finger": 46, "plate": 97, "woman": 149, "handle": 59, "branch": 21, "food": 49, "bear": 8, "vase": 140, "vegetable": 141, "giraffe": 52, "desk": 36, "lady": 70, "towel": 132, "glove": 55, "bag": 4, "nose": 84, "rock": 104, "guy": 56, "shoe": 112, "sneaker": 120, "fence": 45, "people": 90, "house": 65, "seat": 108, "hair": 57, "street": 124, "roof": 105, "racket": 102, "logo": 77, "girl": 53, "arm": 3, "flower": 48, "leaf": 73, "clock": 30, "hill": 63, "bird": 12, "umbrella": 139, "leg": 74, "screen": 107, "men": 79, "sink": 116, "trunk": 138, "post": 100, "sidewalk": 114, "box": 19, "boy": 20, "cow": 33, "skateboard": 117, "plane": 95, "stand": 123, "pillow": 93, "ski": 118, "wire": 148, "toilet": 131, "pot": 101, "sign": 115, "number": 85, "pole": 99, "table": 126, "boat": 14, "sheep": 109, "horse": 64, "eye": 43, "sock": 122, "window": 145, "vehicle": 142, "curtain": 35, "kid": 68, "banana": 5, "engine": 42, "head": 61, "door": 38, "bus": 23, "cabinet": 24, "glass": 54, "flag": 47, "train": 135, "child": 29, "ear": 40, "surfboard": 125, "room": 106, "player": 98, "car": 26, "cap": 25, "tree": 136, "bed": 9, "cat": 27, "coat": 31, "skier": 119, "zebra": 150, "fork": 50, "drawer": 39, "airplane": 1, "helmet": 62, "shirt": 111, "paw": 89, "boot": 16, "snow": 121, "lamp": 71, "book": 15, "animal": 2, "elephant": 41, "tile": 129, "tie": 128, "beach": 7, "pizza": 94, "wheel": 144, "plant": 96, "tower": 133, "mountain": 81, "track": 134, "hand": 58, "fruit": 51, "mouth": 82, "letter": 75, "shelf": 110, "wave": 143, "man": 78, "building": 22, "short": 113, "neck": 83, "phone": 92, "light": 76, "counter": 32, "dog": 37, "face": 44, "jacket": 66, "person": 91, "truck": 137, "bottle": 17, "basket": 6, "jean": 67, "wing": 147}
+
+
+    df_prev = pd.read_csv(prev_list).copy()
+    df_new_raw = pd.read_csv(new_raw_list)
+
+    # 새로운 row를 추가하는 데, 만일 해당 class가 있다면 pass한다.
+    # 하지만 해당 단어가 없다면
+    # 1. 먼저 단수형으로 만들고, 유무를 검사한다.
+    # 2. 그 이후에는 df에 있는 단어들 중에서 가장 유사한 놈을 추출하고, 그것을 word 4로서 추가 한뒤에, idx도 추가한다.
+
+    for index, row in tqdm(df_prev.iterrows()):
+        if df_prev['word'].isin([row['class']]).any():
+            continue
+        else:
+            if df_prev['word'].isin(p.singular_noun(row['class'])).any():
+                continue
+            else:
+                target_word = row['class']
+                max_sim = 0.0
+                most_similar_word = ''
+                most_similar_word_in_category = ''
+
+                synsets1 = wordnet.synsets(target_word)
+                for word in df_prev['class'].tolist():
+                    synsets2 = wordnet.synsets(word)
+
+                    for synset1 in synsets1:
+                        for synset2 in synsets2:
+                            similarity = synset1.path_similarity(synset2)
+                            if similarity is not None and similarity > max_sim:
+                                max_sim = similarity
+                                most_similar_word = synset2.name().split('.')[0]
+                                if most_similar_word in df_prev['class'].tolist():
+                                    most_similar_word_in_category = most_similar_word
+                if most_similar_word_in_category == '':
+                    word_norm = 'FAIL'
+                    word_norm_idx = 0
+                else:
+                    word_norm = most_similar_word_in_category
+                    word_norm_idx = label_to_idx[most_similar_word_in_category]
+                new_row = {'word': row['class'], 'word_2': None, 'word_3': None, 'word_4': word_norm, 'word_4_idx': word_norm_idx}
+                df_prev = df_prev.append(new_row, ignore_index=True)
+
+    df_prev.to_csv()
+
+
 
 def final_converter(orgin, arrival):
     label_to_idx = {"kite": 69, "pant": 87, "bowl": 18, "laptop": 72, "paper": 88, "motorcycle": 80, "railing": 103, "chair": 28, "windshield": 146, "tire": 130, "cup": 34, "bench": 10, "tail": 127, "bike": 11, "board": 13, "orange": 86, "hat": 60, "finger": 46, "plate": 97, "woman": 149, "handle": 59, "branch": 21, "food": 49, "bear": 8, "vase": 140, "vegetable": 141, "giraffe": 52, "desk": 36, "lady": 70, "towel": 132, "glove": 55, "bag": 4, "nose": 84, "rock": 104, "guy": 56, "shoe": 112, "sneaker": 120, "fence": 45, "people": 90, "house": 65, "seat": 108, "hair": 57, "street": 124, "roof": 105, "racket": 102, "logo": 77, "girl": 53, "arm": 3, "flower": 48, "leaf": 73, "clock": 30, "hill": 63, "bird": 12, "umbrella": 139, "leg": 74, "screen": 107, "men": 79, "sink": 116, "trunk": 138, "post": 100, "sidewalk": 114, "box": 19, "boy": 20, "cow": 33, "skateboard": 117, "plane": 95, "stand": 123, "pillow": 93, "ski": 118, "wire": 148, "toilet": 131, "pot": 101, "sign": 115, "number": 85, "pole": 99, "table": 126, "boat": 14, "sheep": 109, "horse": 64, "eye": 43, "sock": 122, "window": 145, "vehicle": 142, "curtain": 35, "kid": 68, "banana": 5, "engine": 42, "head": 61, "door": 38, "bus": 23, "cabinet": 24, "glass": 54, "flag": 47, "train": 135, "child": 29, "ear": 40, "surfboard": 125, "room": 106, "player": 98, "car": 26, "cap": 25, "tree": 136, "bed": 9, "cat": 27, "coat": 31, "skier": 119, "zebra": 150, "fork": 50, "drawer": 39, "airplane": 1, "helmet": 62, "shirt": 111, "paw": 89, "boot": 16, "snow": 121, "lamp": 71, "book": 15, "animal": 2, "elephant": 41, "tile": 129, "tie": 128, "beach": 7, "pizza": 94, "wheel": 144, "plant": 96, "tower": 133, "mountain": 81, "track": 134, "hand": 58, "fruit": 51, "mouth": 82, "letter": 75, "shelf": 110, "wave": 143, "man": 78, "building": 22, "short": 113, "neck": 83, "phone": 92, "light": 76, "counter": 32, "dog": 37, "face": 44, "jacket": 66, "person": 91, "truck": 137, "bottle": 17, "basket": 6, "jean": 67, "wing": 147}

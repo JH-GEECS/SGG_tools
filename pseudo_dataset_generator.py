@@ -1,16 +1,20 @@
+import json
+import os
+from PIL import Image
+import glob
+import time
+import pandas as pd
+from tqdm import tqdm
 import h5py
 import os
 import json
 import glob
-import pandas as pd
 import numpy as np
-import time
+
 
 # 해당 부분에서는 h5 file을 분석하느 부분이다.
 def h5_analyser(path_image_data_json, path_image_id_to_idx_json,
-                object_dir, rel_model_anot, path_original_h5, path_result_h5,
-                object_conversion_table):
-
+                object_dir, rel_model_anot, path_original_h5, path_result_h5, index_dict):
     with h5py.File(path_result_h5, 'w') as f2:
         with h5py.File(path_original_h5, 'r') as f1:
             for name, dataset in f1.items():
@@ -18,7 +22,8 @@ def h5_analyser(path_image_data_json, path_image_id_to_idx_json,
                 if len(basis) == 1:
                     new_dataset = f2.create_dataset(name, shape=(0,), maxshape=(None,), dtype=dataset.dtype)
                 else:
-                    new_dataset = f2.create_dataset(name, shape=(0, basis[1]), maxshape=(None, basis[1]), dtype=dataset.dtype)
+                    new_dataset = f2.create_dataset(name, shape=(0, basis[1]), maxshape=(None, basis[1]),
+                                                    dtype=dataset.dtype)
 
         # data writer part cf) image_data.iloc[0]
         with open(path_image_data_json, 'r') as f:
@@ -30,9 +35,9 @@ def h5_analyser(path_image_data_json, path_image_id_to_idx_json,
             image_name_to_idx = json.load(f)
 
         # object의 class를 network가 받아들일 수 있는 것으로 변형해주는 부분
-        obj_conv = pd.read_csv(object_conversion_table)
-        obj_conv = obj_conv.set_index(['word'])
-
+        with open(index_dict, 'r') as f:
+            index_dict = json.load(f)
+        # obj_conv = obj_conv.set_index(['word'])
 
         # 여기서부터 중요함 annotated 된 것에 한하여 이를 검사를 해야함
         # 또한 매번 image가 추가 될때 마다, path_image_data_json와 image_name_to_idx를 잘 정의 해야함
@@ -60,11 +65,8 @@ def h5_analyser(path_image_data_json, path_image_id_to_idx_json,
         big_rels_idx_comb_list_start = []
         big_rels_idx_comb_list_residual = []
 
-        for idx, each_object_detection_anot in enumerate(object_detection_anot):
+        for idx, each_object_detection_anot in tqdm(enumerate(object_detection_anot), total=len(object_detection_anot)):
             start_time = time.time()
-            print(f'{idx}th csv processing, {each_object_detection_anot}')
-
-
 
             file_name = os.path.basename(each_object_detection_anot).split('.')[0]
             # file_name = file_name.split('_')[0] + '_' + file_name.split('_')[1]
@@ -75,7 +77,6 @@ def h5_analyser(path_image_data_json, path_image_id_to_idx_json,
                 if rel_anot_df[rel_anot_df['semantic'] == True]['semantic'].count() == 0:
                     print(f'{idx}th csv no rel!!!')
                     continue
-
 
             num_imgs += 1
 
@@ -96,8 +97,8 @@ def h5_analyser(path_image_data_json, path_image_id_to_idx_json,
             big_imgs_bbox_list_raw.append([obj_len])
 
             # 오직 true relatio만을 저장해야 한다. 여기 매우 신경써서 작성하기
-            if os.path.join(rel_model_anot_dir ,file_name+'.csv') in rel_model_anot:
-                rel_anot_df = pd.read_csv(os.path.join(rel_model_anot_dir ,file_name+'.csv'))
+            if os.path.join(rel_model_anot_dir, file_name + '.csv') in rel_model_anot:
+                rel_anot_df = pd.read_csv(os.path.join(rel_model_anot_dir, file_name + '.csv'))
                 # rel_len = len(rel_anot_df)
                 # big_imgs_rel_list_raw.append([rel_len])
 
@@ -115,11 +116,11 @@ def h5_analyser(path_image_data_json, path_image_id_to_idx_json,
                 big_rels_idx_comb_list_start.extend(rel_obj_idxs_cum)
                 num_rels += rel_len
 
-                print(f'done a file, {time.time() - start_time} seconds')
 
             num_objs += obj_len  # 누계를 이용한 방법
-            # 여기에 문제가 있다. lantern?
-            obj_labels = [[obj_conv.loc[x][-1]] for x in det_anot_df['class'].values]  # extend로 붙여야 할듯
+            # 여기에 문제가 있다. lantern? -> OOD case
+            # 다행이도 별 문제 없다. object anot 에서 하는 것이므로 이부분은 spell_checked를 넣으면 될듯하다.
+            obj_labels = [[index_dict['label_to_idx'][x]] for x in det_anot_df['class_refined'].values]  # extend로 붙여야 할듯
             big_bboxes_labels_list.extend(obj_labels)
 
         ### 매우 중요 !!! 위의 list들을 저장하는 과정을 거쳐야 한다!!!
@@ -133,7 +134,7 @@ def h5_analyser(path_image_data_json, path_image_id_to_idx_json,
         f2['boxes_512'][nrows:] = np.array(big_boxes1024_list, dtype=np.int32)
 
         nrows = f2['labels'].shape[0]
-        f2['labels'].resize((nrows + num_objs,1))
+        f2['labels'].resize((nrows + num_objs, 1))
         f2['labels'][nrows:] = np.array(big_bboxes_labels_list, dtype=np.int64)
 
         nrows = f2['img_to_first_box'].shape[0]
@@ -172,39 +173,91 @@ def h5_analyser(path_image_data_json, path_image_id_to_idx_json,
 
         nrows = f2['split'].shape[0]
         f2['split'].resize((nrows + num_imgs,))
-        temp = np.ones((num_imgs, ), dtype=np.int32) * 2
+        temp = np.ones((num_imgs,), dtype=np.int32) * 2
         f2['split'][nrows:] = temp
 
         """
         # get the current number of rows in the dataset
         nrows = dataset.shape[0]
-        
+
         # resize the dataset to accommodate the new rows
         dataset.resize((nrows + new_data.shape[0], new_data.shape[1]))
-        
+
         # add the new rows to the dataset
         dataset[nrows:, :] = new_data
-        
+
         """
         test_trigger = True
 
-def json_analyser(dir, path):
-    with open(path, 'r') as f:
-        data = json.load(f)
-        test = 1
+
+# 매우 중요 relationship이 0개인 image에 대해서는 idx 부여하는 것을 skip 해야 한다.
+
+def image_to_json_for_rel(image_dir, file_path, file_path_2, rel_dir):
+    # pandas 기준으로 해야할 것으로 생각된다.
+    with open(file_path, 'w') as f1:
+        with open(file_path_2, 'w') as f2:
+            visual_genome_list = []
+            image_name_to_idx = {}
+
+            csv_path_list = sorted(glob.glob(os.path.join(rel_dir, '*.csv')))
+
+            cum_idx = 0
+            for idx, csv_path in tqdm(enumerate(csv_path_list), total=len(csv_path_list)):
+                start_time = time.time()
+                each_pd = pd.read_csv(csv_path)
+                if each_pd[each_pd['semantic'] == True]['semantic'].count() == 0:
+                    continue
+                else:
+                    image_name = os.path.basename(csv_path).split('.')[0]
+                    image_path = os.path.join(image_dir, image_name + '.jpg')
+                    each_img = Image.open(image_path)
+                    width, height = each_img.size
+
+                    image_dict = {}
+                    image_dict['width'] = width
+                    image_dict['height'] = height
+                    image_dict['url'] = ''
+                    image_dict['image_id'] = image_name
+
+                    image_dict['coco_id'] = None
+                    image_dict['flickr_id'] = None
+                    image_dict['anti_prop'] = 0.0
+                    visual_genome_list.append(image_dict)
+                    image_name_to_idx[image_name] = cum_idx
+                    cum_idx += 1
+
+            json.dump(image_name_to_idx, f2)
+        json.dump(visual_genome_list, f1)
+
 
 if __name__ == "__main__":
+    # 제작할 데이터의 root
+    root_dir = r'E:\23.04.04\Input'
 
-    path_image_data_json = r'Z:\bak_sgb\datasets\vg\debug_20230425\image_data_rel.json'
-    path_image_id_to_idx_json = r'Z:\bak_sgb\datasets\vg\debug_20230425\image_name_to_idx_rel.json'
-    object_dir = r'Z:\bak_sgb\datasets\vg\debug_20230425\CSV'
-    rel_model_anot = r'Z:\bak_sgb\datasets\vg\debug_20230425\CSV_test'
-    path_original_h5 = r'Z:\Scene-Graph-Benchmark.pytorch\datasets\vg\VG-SGG-with-attri.h5'
-    path_result_h5 = r'Z:\bak_sgb\datasets\vg\debug_20230425\VG-SGG-with-attri.h5'
-    object_conversion_table = r'Z:\assistant\assistant_deploy\word_refined_final_done.csv'
+    # 이미지 폴더, CSV rel 폴더
+    image_dir = 'Image'
+    rel_dir = 'CSV_test'
 
-    # path = os.path.join(dir, h5_path, h5_path_2)
-    # have to load,
+    # 수정 하지 않기
+    file_name_1 = 'image_data.json'
+    file_name_2 = 'image_name_to_idx.json'
+
+    #image_to_json_for_rel(os.path.join(root_dir, image_dir), os.path.join(root_dir, 'image_data.json'),
+    #                      os.path.join(root_dir, 'image_name_to_idx.json'), os.path.join(root_dir, rel_dir))
+
+    # 여기는 크게 문제 없음 위에서 나온거 그대로
+    path_image_data_json = r'Z:\iet_sgg_trial1\PENET\sgg_service\Input\image_data.json'
+    path_image_id_to_idx_json = r'Z:\iet_sgg_trial1\PENET\sgg_service\Input\image_name_to_idx.json'
+    
+    # 여기 문제(완료, spelling check된 obj anot을 넣으면 된다.)
+    object_dir = r'E:\23.04.04\Input\CSV'
+    # 여기도 문제(완료, rel annot combination csv file을 넣으면 된다.)
+    rel_model_anot = r'E:\23.04.04\Input\CSV_test'
+    # 이건 괜찮(파일 그대로)
+    path_original_h5 = r'Z:\iet_sgg_trial1\PENET\sgg_service\Input\example.h5'
+    # 이건 괜찮(이것도 파일명은 유지 해야함)
+    path_result_h5 = r'E:\23.04.04\Input\VG-SGG-with-attri.h5'
+    index_dict = r'E:\23.04.04\Input\VG-SGG-dicts-with-attri.json'
+
     h5_analyser(path_image_data_json, path_image_id_to_idx_json,
-                object_dir, rel_model_anot, path_original_h5, path_result_h5,
-                object_conversion_table)
+                object_dir, rel_model_anot, path_original_h5, path_result_h5, index_dict)

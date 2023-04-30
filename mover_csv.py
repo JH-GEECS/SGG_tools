@@ -6,6 +6,12 @@ import csv
 
 
 def mover(orginal, processed, arrival):
+
+    if processed == arrival:
+        raise ValueError('processed and arrival must be different.')
+
+    os.makedirs(arrival, exist_ok=True)
+
     org_csv_list = glob.glob(os.path.join(orginal, '*.csv'))
     processed_csv_list = glob.glob(os.path.join(processed, '*.csv'))
 
@@ -22,9 +28,16 @@ def mover(orginal, processed, arrival):
 
 
 if __name__ == '__main__':
-    original = r'Z:\assistant\assistant_deploy\rel_pred_anot_spc\a_jobs_doing_now\job_20230324_part'
-    processed = r'Z:\assistant\assistant_deploy\rel_pred_anot_spc\a_finished_job'
-    arrival = r'Z:\assistant\assistant_deploy\rel_pred_anot_spc\a_finished_original_job'
+
+    """
+    original = r'E:\nip_label\task\230423\230423_B_MEDIC_1000_200_CSV'
+    processed = r'E:\nip_label\task\230423\230423_B_MEDIC_1000_200_CSV_output'
+    arrival = r'E:\nip_label\task\230423\230423_B_MEDIC_1000_200_CSV_output_raw'
+    """
+
+    original = r'C:\soft_links\nip_label\230423\230423_B_MEDIC_1000_200_CSV'
+    processed = r'C:\soft_links\nip_label\230423\230423_B_MEDIC_1000_200_CSV_output'
+    arrival = r'C:\soft_links\nip_label\230423\230423_B_MEDIC_1000_200_CSV_output_raw'
 
     mover(original, processed, arrival)
     print('done')
